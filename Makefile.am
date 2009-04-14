@@ -3,11 +3,11 @@
 
 bin_PROGRAMS = umodemd
 
-foo_SOURCES = umodemd.c
+umodemd_SOURCES = umodemd.c
 
-foo_CPPFLAGS = -Wall
+umodemd_CPPFLAGS = -Wall
 
-foo_LDFLAGS = -Wl,--rpath -Wl,/usr/local/lib -lnmea
+umodemd_LDFLAGS = -Wl,--rpath -Wl,/usr/local/lib -lnmea
 
 
 doc::
