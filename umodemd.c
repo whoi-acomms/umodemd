@@ -19,7 +19,7 @@
 #include <sys/time.h>
 #include <libnmea.h>
 #include <errno.h>
-
+#include "config.h"
 
 #define MAX(a,b)    (((a)>(b))?(a):(b))
 #define MIN(a,b)    (((a)<(b))?(a):(b))
@@ -457,7 +457,7 @@ int umodemd_scan(umodemd_t *state,
 {
   DIR *d;
 
-  if (3 < argc) return 1;
+  if (3 > argc) return 1;
 
   if (access(argv[0], F_OK|R_OK|W_OK))
   {
@@ -483,6 +483,7 @@ int umodemd_scan(umodemd_t *state,
  */
 int umodemd_usage(char *img)
 {
+  printf(PACKAGE_STRING " <" PACKAGE_BUGREPORT ">\n");
   printf("usage: %s <serial-device> <baud-rate> <log-directory>\n", img);
   printf("  log-directory may not have a trailing slash.\n");
   return 1;
