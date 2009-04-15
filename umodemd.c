@@ -473,7 +473,6 @@ int umodemd(umodemd_t *state)
       ret = umodemd_dispatch(state, msg, len, IO_RX);
     }
 
-/*
     if (0 < umodemd_fetch_client(state, txbuf, &txlen))
     {
       len = snprintf(msg, NMEASSZ, "%s", txbuf);
@@ -481,7 +480,6 @@ int umodemd(umodemd_t *state)
       txlen = 0;
       ret = umodemd_dispatch(state, msg, len, IO_TX);
     }
-*/
   }
 
   sync();
