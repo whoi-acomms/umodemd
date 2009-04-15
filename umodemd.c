@@ -17,8 +17,9 @@
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/time.h>
-#include <libnmea.h>
+#include <signal.h>
 #include <errno.h>
+#include <libnmea.h>
 #include "config.h"
 
 #define MAX(a,b)    (((a)>(b))?(a):(b))
@@ -64,9 +65,11 @@ typedef struct
 } umodemd_t;
 
 
-/*! forward decl
- */
+/** forward decls *************************************************************/
+
+
 void uerror  (umodemd_t *state, int e);
+
 int umodemd_write_client  (umodemd_t *state, const char *msg, const size_t len, const struct timeval *now);
 int umodemd_write_modem   (umodemd_t *state, const char *msg, const size_t len, const struct timeval *now);
 int umodemd_write_log     (umodemd_t *state, const char *msg, const size_t len, const struct timeval *now, const int io);
@@ -75,9 +78,15 @@ int umodemd_fetch         (umodemd_t *state, const int fd, char *wbuf, const siz
 int umodemd_open_modem    (umodemd_t *state);
 int umodemd_open_client   (umodemd_t *state);
 int umodemd_open_debug    (umodemd_t *state);
+void umodemd_close_modem  (umodemd_t *state);
+void umodemd_close_client (umodemd_t *state);
+void umodemd_close_debug  (umodemd_t *state);
+void umodemd_signal       (int s);
+int umodemd               (umodemd_t *state);
+int umodemd_scan          (umodemd_t *state, int argc, char ** argv);
 
 
-/*! message strings
+/*! message strings for the log source ID
  */
 const char *g_io_strs[2] =
 {
@@ -86,7 +95,7 @@ const char *g_io_strs[2] =
 };
 
 
-/*! global state
+/*! 
  */
 volatile int g_running = 1;
 
@@ -368,7 +377,7 @@ int umodemd_open_client(umodemd_t *state)
  */
 int umodemd_open_debug(umodemd_t *state)
 {
-  state->debug = fopen("debug.log", "w");
+  state->debug = fopen("umodemd.log", "w");
   if (NULL == state->debug)
   {
     fprintf(stderr, "FATAL: could not open debug.log\n");
@@ -403,6 +412,14 @@ void umodemd_close_client(umodemd_t *state)
 
 /*!
  */
+void umodemd_signal(int s)
+{
+  g_running = 0;
+}
+
+
+/*!
+ */
 int umodemd(umodemd_t *state)
 {
   char    txbuf[BUFSZ] = {'\0'};
@@ -416,6 +433,8 @@ int umodemd(umodemd_t *state)
   if (umodemd_open_debug(state))  return 1;
   if (umodemd_open_client(state)) return 1;
   if (umodemd_open_modem(state))  return 1;
+
+  signal(SIGINT, umodemd_signal);
 
   while (g_running)
   {
