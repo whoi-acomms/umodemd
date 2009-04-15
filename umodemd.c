@@ -213,11 +213,11 @@ int umodemd_write_log(umodemd_t *state, const char *msg, const size_t len, const
 
   /* get log line
    *   "%s,NMEA.%s,%s"
-   *   strftime "%F-%T%^Z"
+   *   strftime "%F %T"
    *   direction: {TX, RX}
    *   smsg
    */
-  wlen = strftime(tbuf, TIMESSZ-1, "%F-%T%^Z", &stamp);
+  wlen = strftime(tbuf, TIMESSZ-1, "%F %T", &stamp);
   if (0 == wlen)
   {
     uerror(state, errno);
@@ -227,7 +227,7 @@ int umodemd_write_log(umodemd_t *state, const char *msg, const size_t len, const
 
   /* write
    */
-  wlen = fprintf(fp, "%s,NMEA.%s,%s\n", tbuf, g_io_strs[io], msg);
+  wlen = fprintf(fp, "%sZ,NMEA.%s,%s\n", tbuf, g_io_strs[io], msg);
   if (0 > wlen) uerror(state, errno);
   if (fclose(fp)) uerror(state, errno);
   return 0;
