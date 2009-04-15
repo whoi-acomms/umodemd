@@ -29,7 +29,6 @@
 #endif
 
 #define FPATHSZ     (0x1000)
-#define FLINESZ     (0x1000)
 #define TIMESSZ     (0x1000)
 #define NMEASSZ     (0x1000)
 #define ERRORSZ     (0x1000)
@@ -42,10 +41,10 @@
   .log   = NULL, \
   .baud  = 19200, \
   .t_pol = 50, \
-  .t_sel = 50, \
+  .mfd   = -1, \
   .i_cli = stdin, \
   .o_cli = stdout, \
-  .modem = NULL, \
+  .debug = NULL, \
 }
 
 
@@ -56,12 +55,11 @@ typedef struct
   char *  dev,
        *  log;
   int     baud,
-          mfd,
           t_pol,
-          t_sel;
+          mfd;
   FILE *  i_cli,
-       *  o_cli;
-
+       *  o_cli,
+       *  debug;
 } umodemd_t;
 
 
@@ -71,11 +69,12 @@ void uerror  (umodemd_t *state, int e);
 int umodemd_write_client  (umodemd_t *state, const char *msg, const size_t len, const struct timeval *now);
 int umodemd_write_modem   (umodemd_t *state, const char *msg, const size_t len, const struct timeval *now);
 int umodemd_write_log     (umodemd_t *state, const char *msg, const size_t len, const struct timeval *now, const int io);
-int umodemd_dispatch      (umodemd_t *state, const char *msg, const size_t len, const int io);
+int umodemd_dispatch      (umodemd_t *state, char *msg,  size_t len, const int io);
 int umodemd_fetch_modem   (umodemd_t *state, char *wbuf, size_t *wlen);
 int umodemd_fetch_client  (umodemd_t *state, char *wbuf, size_t *wlen);
 int umodemd_open_modem    (umodemd_t *state);
 int umodemd_open_client   (umodemd_t *state);
+int umodemd_open_debug    (umodemd_t *state);
 
 
 /*! message strings
@@ -97,9 +96,27 @@ volatile int g_running = 1;
 void uerror(umodemd_t *state, int e)
 {
   char ebuf[ERRORSZ] = {'\0'};
+  int uerr = 1;
+
   strerror_r(e, ebuf, ERRORSZ);
-  if (state) umodemd_write_client(state, ebuf, strlen(ebuf), NULL);
-  else printf("%s\n", ebuf);
+  if (state) uerr = umodemd_write_client(state, ebuf, strlen(ebuf), NULL);
+  if (uerr) printf("%s\n", ebuf);
+}
+
+
+/*!
+ */
+void printd(const char *msg, int len)
+{
+  int k;
+  for (k = 0; k < len; k++)
+  switch(msg[k])
+  {
+    case '\r': printf("\\r"); break;
+    case '\n': printf("\\n"); break;
+    case '\0': printf("\\0"); break;
+    default:   printf("%c", msg[k]); break;
+  }
 }
 
 
@@ -107,7 +124,7 @@ void uerror(umodemd_t *state, int e)
  */
 int umodemd_write_client(umodemd_t *state, const char *msg, const size_t len, const struct timeval *now)
 {
-  int wlen = fprintf(state->o_cli, "%s", msg);
+  int wlen = fprintf(state->o_cli, "%s\n", msg);
   if (0 > wlen)
   {
     uerror(NULL, errno);
@@ -152,11 +169,9 @@ int umodemd_write_modem(umodemd_t *state, const char *msg, const size_t len, con
 int umodemd_write_log(umodemd_t *state, const char *msg, const size_t len, const struct timeval *now, const int io)
 {
   char   tbuf[TIMESSZ] = {'\0'},
-         pbuf[FPATHSZ] = {'\0'},
-         lbuf[FLINESZ] = {'\0'};
+         pbuf[FPATHSZ] = {'\0'};
   int    wlen,
-         plen,
-         llen;
+         plen;
   FILE * fp;
 
   struct tm stamp;
@@ -168,11 +183,13 @@ int umodemd_write_log(umodemd_t *state, const char *msg, const size_t len, const
   }
 
   /* get filename
+   * round minutes off to tens
    *   "%s/nmea-%s.csv"
    *   state->log
-   *   strftime "%F-%R"
+   *   strftime "%F-%H-%M"
    */
-  wlen = strftime(tbuf, TIMESSZ-1, "%F-%R", &stamp);
+  stamp.tm_min = (stamp.tm_min/10)*10;
+  wlen = strftime(tbuf, TIMESSZ-1, "%F-%H-%M", &stamp);
   if (0 == wlen)
   {
     uerror(state, errno);
@@ -200,24 +217,18 @@ int umodemd_write_log(umodemd_t *state, const char *msg, const size_t len, const
    *   direction: {TX, RX}
    *   smsg
    */
-  strftime(tbuf, TIMESSZ-1, "%F-%T%^Z", &stamp);
+  wlen = strftime(tbuf, TIMESSZ-1, "%F-%T%^Z", &stamp);
+  if (0 == wlen)
   {
     uerror(state, errno);
-    if (fclose(fp)) uerror(state, errno);
-    return -1;
-  }
-  llen = snprintf(lbuf, FLINESZ, "%s,NMEA.%s,%s", tbuf, g_io_strs[io], msg);
-  if (0 > llen)
-  {
-    uerror(state, errno);
-    if (fclose(fp)) uerror(state, errno);
-    return -1;
+    memset(tbuf, '\0', TIMESSZ);
+    tbuf[0]=' ';
   }
 
   /* write
    */
-  wlen = fprintf(fp, "%s\n", lbuf);
-  if (0 > llen) uerror(state, errno);
+  wlen = fprintf(fp, "%s,NMEA.%s,%s\n", tbuf, g_io_strs[io], msg);
+  if (0 > wlen) uerror(state, errno);
   if (fclose(fp)) uerror(state, errno);
   return 0;
 }
@@ -225,39 +236,22 @@ int umodemd_write_log(umodemd_t *state, const char *msg, const size_t len, const
 
 /*!
  */
-int umodemd_dispatch(umodemd_t *state, const char *msg, const size_t len, const int io)
+int umodemd_dispatch(umodemd_t *state, char *msg, size_t len, const int io)
 {
-  char  smsg[NMEASSZ] = {'\0'};
-  int   slen,
-        wlen,
-        uerr = 0;
-
+  int uerr = 0;
   struct timeval now;
 
-  gettimeofday(&now, NULL);
-
-  /* sanitize the string so that all handlers work from the same content
-   * fit into sentence buffer with zero-term
-   * remove trailing whitespace
+  /* sanitize
    */
-  slen = snprintf(smsg, MIN(len, NMEASSZ), "%s", msg);
-  if (0 > slen)
-  {
-    uerror(state, errno);
-    return -1;
-  }
-  wlen = strcspn(smsg, "\t\r\n ");
-  if (wlen)
-  {
-    smsg[wlen] = 0;
-    slen = wlen;
-  }
+  len = strcspn(msg, "\t\r\n ");
+  msg[len] = 0;
 
   /* dispatch sentence
    */
-  if (io == IO_TX) uerr |= umodemd_write_modem(state, smsg, slen, &now);
-  if (io == IO_RX) uerr |= umodemd_write_client(state, smsg, slen, &now);
-  uerr |= umodemd_write_log(state, smsg, slen, &now, io);
+  gettimeofday(&now, NULL);
+  if (io == IO_TX) uerr |= umodemd_write_modem(state, msg, len, &now);
+  if (io == IO_RX) uerr |= umodemd_write_client(state, msg, len, &now);
+  uerr |= umodemd_write_log(state, msg, len, &now, io);
   return uerr;
 }
 
@@ -288,7 +282,7 @@ int umodemd_fetch_modem(umodemd_t *state, char *wbuf, size_t *wlen)
   if (0 == (pfd.revents & POLLIN))
     return 0;
 
-  len = read(state->mfd, wbuf + *wlen, NMEASSZ - *wlen);
+  len = read(pfd.fd, wbuf + *wlen, NMEASSZ - *wlen);
   if (0 > len)
   {
     uerror(state, errno);
@@ -304,37 +298,42 @@ int umodemd_fetch_modem(umodemd_t *state, char *wbuf, size_t *wlen)
  */
 int umodemd_fetch_client(umodemd_t *state, char *wbuf, size_t *wlen)
 {
-  struct timeval tv;
-  fd_set fds;
+  struct pollfd pfd =
+  {
+    .revents = 0,
+    .events  = POLLIN,
+    .fd      = fileno(state->i_cli),
+  };
+  char c;
   int ret = 0,
-      fd  = fileno(state->i_cli),
-      c   = 0;
+      len = 0;
 
-  tv.tv_sec  = 0;
-  tv.tv_usec = 1000 * state->t_sel;
-
-  FD_ZERO(&fds);
-  FD_SET(fd, &fds);
-
-  ret = select(fd+1, &fds, NULL, NULL, &tv);
+  ret = poll(&pfd, 1, state->t_pol);
   if (0 > ret)
   {
     uerror(state, errno);
     return -1;
   }
 
-  if (FD_ISSET(fd, &fds))
-  {
-    c = fgetc(state->i_cli);
+  if (0 == ret)
+    return 0;
 
-    switch(c)
-    {
-      case EOF:
-      case '\r':
-      case '\n': return 1;
-    }
-    wbuf[(*wlen)++] = c;
+  if (0 == (pfd.revents & POLLIN))
+    return 0;
+
+  len = read(pfd.fd, &c, 1);
+  if (0 > len)
+  {
+    uerror(state, errno);
+    return -1;
   }
+  switch(c)
+  {
+    case EOF:
+    case '\r':
+    case '\n': return 1;
+  }
+  wbuf[(*wlen)++] = c;
 
   return *wlen == NMEASSZ;
 }
@@ -345,7 +344,7 @@ int umodemd_fetch_client(umodemd_t *state, char *wbuf, size_t *wlen)
 int umodemd_open_modem(umodemd_t *state)
 {
   struct termios opt;
-  int rate = 19200;
+  int rate = 0;
 
   state->mfd = open(state->dev, O_RDWR|O_NOCTTY);
   if (0 > state->mfd)
@@ -354,14 +353,31 @@ int umodemd_open_modem(umodemd_t *state)
     return -1;
   }
 
+  memset(&opt, 0, sizeof(struct termios));
   if (tcgetattr(state->mfd, &opt))
   {
     uerror(state, errno);
     return -1;
   }
 
+  opt.c_iflag    &= ~IXON;
+  opt.c_iflag    &= ~IXOFF;
+  opt.c_iflag    &= ~IXANY;
+  opt.c_iflag    |= IGNBRK | IGNPAR;
+  opt.c_oflag     = 0;
+  opt.c_lflag     = 0;
+  opt.c_cflag    &= ~CSIZE;
+  opt.c_cflag    &= ~PARENB;
+  opt.c_cflag    &= ~CSTOPB;
+  opt.c_cflag    &= ~CNEW_RTSCTS;
+  opt.c_cflag    |= CLOCAL | CREAD | CS8;
+  opt.c_cc[VMIN]  = 0;
+  opt.c_cc[VTIME] = 0;
+
+
   switch (state->baud)
   {
+    default:
     case 19200:  rate = B19200;  break;
     case 115200: rate = B115200; break;
   }
@@ -375,19 +391,7 @@ int umodemd_open_modem(umodemd_t *state)
     uerror(state, errno);
     return -1;
   }
-
-  opt.c_iflag     = (IGNBRK | IGNPAR) & ~(IXON | IXOFF | IXANY);
-  opt.c_oflag     = 0;
-  opt.c_lflag     = 0;
-  opt.c_cflag    |= (CLOCAL | CREAD | CS8);
-  opt.c_cflag    &= ~PARENB;
-  opt.c_cflag    &= ~CSTOPB;
-  opt.c_cflag    &= ~CSIZE;
-  opt.c_cflag    &= ~CNEW_RTSCTS;
-  opt.c_cc[VMIN]  = 0;
-  opt.c_cc[VTIME] = 0;
-
-  if (tcsetattr(state->mfd, TCSAFLUSH, &opt))
+  if (tcsetattr(state->mfd, TCSANOW, &opt))
   {
     uerror(state, errno);
     return -1;
@@ -407,6 +411,43 @@ int umodemd_open_client(umodemd_t *state)
 
 /*!
  */
+int umodemd_open_debug(umodemd_t *state)
+{
+  state->debug = fopen("debug.log", "w");
+  if (NULL == state->debug)
+  {
+    fprintf(stderr, "FATAL: could not open debug.log\n");
+    return -1;
+  }
+  return 0;
+}
+
+
+/*!
+ */
+void umodemd_close_modem(umodemd_t *state)
+{
+  ioctl(state->mfd, TCFLSH, 0);
+  close(state->mfd);
+}
+
+/*!
+ */
+void umodemd_close_debug(umodemd_t *state)
+{
+  fclose(state->debug);
+}
+
+
+/*!
+ */
+void umodemd_close_client(umodemd_t *state)
+{
+}
+
+
+/*!
+ */
 int umodemd(umodemd_t *state)
 {
   char    txbuf[NMEASSZ*8] = {'\0'};
@@ -417,34 +458,36 @@ int umodemd(umodemd_t *state)
           len   = 0,
           ret   = 0;
 
-  if (umodemd_open_client(state))
-    return 1;
-
-  if (umodemd_open_modem(state))
-    return 1;
+  if (umodemd_open_debug(state))  return 1;
+  if (umodemd_open_client(state)) return 1;
+  if (umodemd_open_modem(state))  return 1;
 
   while (g_running)
   {
     if (0 < umodemd_fetch_modem(state, rxbuf, &rxlen))
     while (1)
     {
+      memset(msg, '\0', sizeof(char)*NMEASSZ);
       len = nmea_scan(msg, NMEASSZ, rxbuf, &rxlen);
-      if (!len) break;
+      if (0 == len) break;
       ret = umodemd_dispatch(state, msg, len, IO_RX);
     }
 
+/*
     if (0 < umodemd_fetch_client(state, txbuf, &txlen))
     {
       len = snprintf(msg, NMEASSZ, "%s", txbuf);
+      memset(txbuf, '\0', sizeof(char)*NMEASSZ*8);
       txlen = 0;
       ret = umodemd_dispatch(state, msg, len, IO_TX);
     }
+*/
   }
 
-  /* slam modem fd closed
-   */
-  ioctl(state->mfd, TCFLSH, 0);
-  close(state->mfd);
+  sync();
+  umodemd_close_debug(state);
+  umodemd_close_client(state);
+  umodemd_close_modem(state);
   return 0;
 }
 
@@ -495,7 +538,7 @@ int umodemd_usage(char *img)
 int main(int     argc,
          char ** argv)
 {
-  umodemd_t state;
+  umodemd_t state = UMODEMD_INITIALIZER;
   return umodemd_scan(&state, argc-1, argv+1)
        ? umodemd_usage(argv[0])
        : umodemd(&state);
