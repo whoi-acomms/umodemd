@@ -29,13 +29,19 @@
 #  define CNEW_RTSCTS (CRTSCTS)
 #endif
 
-#define BUFSZ       (0x8000) /*!< */
-#define NMEASSZ     (0x1000) /*!< */
-#define FPATHSZ     (0x1000) /*!< */
-#define TIMESSZ     (0x1000) /*!< */
-#define ERRORSZ     (0x1000) /*!< */
-#define IO_TX       (0)
-#define IO_RX       (1)
+/*!
+ * a talker ID to pass NMEA-compliant log messages through the console
+ * when writing to the debug log fails.
+ */
+#define UMODEMD_TALKER_ID "$UMDMD"
+
+#define BUFSZ       (0x8000) /*!< IO buffers */
+#define NMEASSZ     (0x1000) /*!< largest possible NMEA sentence */
+#define FPATHSZ     (0x1000) /*!< file paths */
+#define TIMESSZ     (0x1000) /*!< string representation of time */
+#define ERRORSZ     (0x1000) /*!< error strings */
+#define IO_TX       (0)      /*!< message from console, to modem, to log */
+#define IO_RX       (1)      /*!< message from modem, to console, to log */
 
 #define UMODEMD_INITIALIZER \
 {\
@@ -70,6 +76,7 @@ typedef struct
 
 void uerror  (umodemd_t *state, int e);
 
+int umodemd_write_debug   (umodemd_t *state, char *msg);
 int umodemd_write_client  (umodemd_t *state, const char *msg, const size_t len, const struct timeval *now);
 int umodemd_write_modem   (umodemd_t *state, const char *msg, const size_t len, const struct timeval *now);
 int umodemd_write_log     (umodemd_t *state, const char *msg, const size_t len, const struct timeval *now, const int io);
@@ -95,26 +102,12 @@ const char *g_io_strs[2] =
 };
 
 
-/*! 
+/*! is-running flag; switched to zero by signal handler on SIGINT.
  */
 volatile int g_running = 1;
 
 
-/*! custom error handler with fallback to printf
- */
-void uerror(umodemd_t *state, int e)
-{
-  char ebuf[ERRORSZ] = {'\0'};
-  int uerr = 1;
-
-  strerror_r(e, ebuf, ERRORSZ);
-  if (state) uerr = umodemd_write_client(state, ebuf, strlen(ebuf), NULL);
-  if (uerr) printf("%s\n", ebuf);
-}
-
-
 /*!
- */
 void printd(const char *msg, int len)
 {
   int k;
@@ -127,6 +120,51 @@ void printd(const char *msg, int len)
     default:   printf("%c", msg[k]); break;
   }
 }
+ */
+
+
+/*! custom error handler
+ * first attempts to write to debug log
+ * on failure, a state-less attempt is made (see umodemd_write_debug)
+ *
+ * NMEA-friendly errno indicator is sent to stdout
+ * this avoids confusing the client when state->o_cli == stdout (default)
+ * since uerror falls through, the cascading failure will log two errors
+ * the first one will be the uerror(NULL, errno) call inside umodemd_write_debug
+ * the second one will be the "real" error that triggered the first uerror() call
+ */
+void uerror(umodemd_t *state, int e)
+{
+  char ebuf[ERRORSZ] = {'\0'};
+  long cksum = 0;
+  int  uerr = 1;
+
+  if (state)
+  {
+    strerror_r(e, ebuf, ERRORSZ);
+    uerr = umodemd_write_debug(state, ebuf);
+  }
+  if (uerr)
+  {
+    snprintf(ebuf, ERRORSZ, UMODEMD_TALKER_ID ",ERRNO,%d*", e);
+    nmea_cksum(ebuf, &cksum);
+    printf("%s%02hhx\n", ebuf, (int)cksum);
+  }
+}
+
+
+/*!
+ */
+int umodemd_write_debug(umodemd_t *state, char *msg)
+{
+  int wlen = fprintf(state->debug, "%ld %s\n", time(NULL), msg);
+  if (0 > wlen)
+  {
+    uerror(NULL, errno);
+    return -1;
+  }
+  return 0;
+}
 
 
 /*!
@@ -136,7 +174,7 @@ int umodemd_write_client(umodemd_t *state, const char *msg, const size_t len, co
   int wlen = fprintf(state->o_cli, "%s\n", msg);
   if (0 > wlen)
   {
-    uerror(NULL, errno);
+    uerror(state, errno);
     return -1;
   }
   return 0;
@@ -190,6 +228,10 @@ int umodemd_write_log(umodemd_t *state, const char *msg, const size_t len, const
     uerror(state, errno);
     return -1;
   }
+
+  /* quick hack to sync every 15 min
+   */
+  if (0 == (stamp.tm_min % 15)) sync();
 
   /* get filename
    * round minutes off to tens
