@@ -28,10 +28,11 @@
 #  define CNEW_RTSCTS (CRTSCTS)
 #endif
 
-#define FPATHSZ     (0x1000)
-#define TIMESSZ     (0x1000)
-#define NMEASSZ     (0x1000)
-#define ERRORSZ     (0x1000)
+#define BUFSZ       (0x8000) /*!< */
+#define NMEASSZ     (0x1000) /*!< */
+#define FPATHSZ     (0x1000) /*!< */
+#define TIMESSZ     (0x1000) /*!< */
+#define ERRORSZ     (0x1000) /*!< */
 #define IO_TX       (0)
 #define IO_RX       (1)
 
@@ -70,8 +71,7 @@ int umodemd_write_client  (umodemd_t *state, const char *msg, const size_t len, 
 int umodemd_write_modem   (umodemd_t *state, const char *msg, const size_t len, const struct timeval *now);
 int umodemd_write_log     (umodemd_t *state, const char *msg, const size_t len, const struct timeval *now, const int io);
 int umodemd_dispatch      (umodemd_t *state, char *msg,  size_t len, const int io);
-int umodemd_fetch_modem   (umodemd_t *state, char *wbuf, size_t *wlen);
-int umodemd_fetch_client  (umodemd_t *state, char *wbuf, size_t *wlen);
+int umodemd_fetch         (umodemd_t *state, const int fd, char *wbuf, const size_t maxlen, size_t *wlen);
 int umodemd_open_modem    (umodemd_t *state);
 int umodemd_open_client   (umodemd_t *state);
 int umodemd_open_debug    (umodemd_t *state);
@@ -258,13 +258,13 @@ int umodemd_dispatch(umodemd_t *state, char *msg, size_t len, const int io)
 
 /*!
  */
-int umodemd_fetch_modem(umodemd_t *state, char *wbuf, size_t *wlen)
+int umodemd_fetch(umodemd_t *state, const int fd, char *wbuf, const size_t maxlen, size_t *wlen)
 {
   struct pollfd pfd =
   {
     .revents = 0,
     .events  = POLLIN,
-    .fd      = state->mfd,
+    .fd      = fd,
   };
   int ret = 0,
       len = 0;
@@ -282,7 +282,7 @@ int umodemd_fetch_modem(umodemd_t *state, char *wbuf, size_t *wlen)
   if (0 == (pfd.revents & POLLIN))
     return 0;
 
-  len = read(pfd.fd, wbuf + *wlen, NMEASSZ - *wlen);
+  len = read(pfd.fd, wbuf + *wlen, maxlen - *wlen);
   if (0 > len)
   {
     uerror(state, errno);
@@ -291,51 +291,6 @@ int umodemd_fetch_modem(umodemd_t *state, char *wbuf, size_t *wlen)
 
   *wlen += len;
   return 1;
-}
-
-
-/*!
- */
-int umodemd_fetch_client(umodemd_t *state, char *wbuf, size_t *wlen)
-{
-  struct pollfd pfd =
-  {
-    .revents = 0,
-    .events  = POLLIN,
-    .fd      = fileno(state->i_cli),
-  };
-  char c;
-  int ret = 0,
-      len = 0;
-
-  ret = poll(&pfd, 1, state->t_pol);
-  if (0 > ret)
-  {
-    uerror(state, errno);
-    return -1;
-  }
-
-  if (0 == ret)
-    return 0;
-
-  if (0 == (pfd.revents & POLLIN))
-    return 0;
-
-  len = read(pfd.fd, &c, 1);
-  if (0 > len)
-  {
-    uerror(state, errno);
-    return -1;
-  }
-  switch(c)
-  {
-    case EOF:
-    case '\r':
-    case '\n': return 1;
-  }
-  wbuf[(*wlen)++] = c;
-
-  return *wlen == NMEASSZ;
 }
 
 
@@ -450,9 +405,9 @@ void umodemd_close_client(umodemd_t *state)
  */
 int umodemd(umodemd_t *state)
 {
-  char    txbuf[NMEASSZ*8] = {'\0'};
-  char    rxbuf[NMEASSZ*8] = {'\0'},
-          msg[NMEASSZ]     = {'\0'};
+  char    txbuf[BUFSZ] = {'\0'};
+  char    rxbuf[BUFSZ] = {'\0'},
+          msg[NMEASSZ] = {'\0'};
   size_t  txlen = 0,
           rxlen = 0,
           len   = 0,
@@ -464,20 +419,20 @@ int umodemd(umodemd_t *state)
 
   while (g_running)
   {
-    if (0 < umodemd_fetch_modem(state, rxbuf, &rxlen))
+    if (0 < umodemd_fetch(state, state->mfd, rxbuf, BUFSZ, &rxlen))
     while (1)
     {
-      memset(msg, '\0', sizeof(char)*NMEASSZ);
+      memset(msg, '\0', sizeof(char) * NMEASSZ);
       len = nmea_scan(msg, NMEASSZ, rxbuf, &rxlen);
       if (0 == len) break;
       ret = umodemd_dispatch(state, msg, len, IO_RX);
     }
 
-    if (0 < umodemd_fetch_client(state, txbuf, &txlen))
+    if (0 < umodemd_fetch(state, fileno(state->i_cli), txbuf, BUFSZ, &txlen))
     {
-      len = snprintf(msg, NMEASSZ, "%s", txbuf);
-      memset(txbuf, '\0', sizeof(char)*NMEASSZ*8);
-      txlen = 0;
+      memset(msg, '\0', sizeof(char) * NMEASSZ);
+      len = nmea_scan(msg, NMEASSZ, txbuf, &txlen);
+      if (0 == len) break;
       ret = umodemd_dispatch(state, msg, len, IO_TX);
     }
   }
