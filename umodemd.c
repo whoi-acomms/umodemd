@@ -5,6 +5,8 @@
  * \brief a daemon for logged serial comms with the micro-modem.
  */
 
+#include "config.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -14,13 +16,14 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <dirent.h>
+#ifdef HAVE_SYS_IOCTL_H
 #include <sys/ioctl.h>
+#endif
 #include <sys/types.h>
 #include <sys/time.h>
 #include <signal.h>
 #include <errno.h>
 #include <libnmea.h>
-#include "config.h"
 
 #define MAX(a,b)    (((a)>(b))?(a):(b))
 #define MIN(a,b)    (((a)<(b))?(a):(b))
@@ -433,7 +436,9 @@ int umodemd_open_debug(umodemd_t *state)
  */
 void umodemd_close_modem(umodemd_t *state)
 {
+#ifdef HAVE_SYS_IOCTL_H
   ioctl(state->mfd, TCFLSH, 0);
+#endif
   close(state->mfd);
 }
 
@@ -493,8 +498,8 @@ int umodemd(umodemd_t *state)
     {
       memset(msg, '\0', sizeof(char) * NMEASSZ);
       len = nmea_scan(msg, NMEASSZ, txbuf, &txlen);
-      if (0 == len) break;
-      ret = umodemd_dispatch(state, msg, len, IO_TX);
+      if (len)
+        ret = umodemd_dispatch(state, msg, len, IO_TX);
     }
   }
 
