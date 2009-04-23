@@ -297,7 +297,7 @@ int umodemd_dispatch(umodemd_t *state, char *msg, size_t len, const int io)
 
   /* sanitize
    */
-  len = strcspn(msg, "\t\r\n ");
+  len = strcspn(msg, "\r\n");
   msg[len] = 0;
 
   /* dispatch sentence
