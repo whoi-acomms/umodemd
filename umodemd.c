@@ -219,12 +219,15 @@ int umodemd_write_modem(umodemd_t *state, const char *msg, const size_t len, con
 int umodemd_write_log(umodemd_t *state, const char *msg, const size_t len, const struct timeval *now, const int io)
 {
   char   tbuf[TIMESSZ] = {'\0'},
+		 filetimebuf[TIMESSZ] = {'\0'},
          pbuf[FPATHSZ] = {'\0'};
   int    wlen,
+		 result,
          plen;
   FILE * fp;
 
   struct tm stamp;
+  struct tm filename_time;
 
   if (NULL == gmtime_r(&(now->tv_sec), &stamp))
   {
@@ -242,19 +245,43 @@ int umodemd_write_log(umodemd_t *state, const char *msg, const size_t len, const
    *   state->log
    *   strftime "%F-%H-%M"
    */
-  stamp.tm_min = (stamp.tm_min/10)*10;
+
+  // Make a copy of the timestamp, and round it
+  // to the nearest 10 minutes.
+  result = memcpy(&filename_time, &stamp, sizeof(struct tm));
+  if (0==result)
+  {
+	  uerror(state, errno);
+	  return -1;
+  }
+  filename_time.tm_min = (stamp.tm_min/10)*10;
+
+  // Turn the rounded timestamp into a string we can use in the file name.
+  wlen = strftime(filetimebuf, TIMESSZ-1, "%F-%H-%M", &filename_time);
+   if (0 == wlen)
+   {
+     uerror(state, errno);
+     return -1;
+   }
+
+   // Generate the file pa
+   plen = snprintf(pbuf, FPATHSZ, "%s/nmea-%s.csv", state->log, filetimebuf);
+   if (0 > plen)
+   {
+     uerror(state, errno);
+     return -1;
+   }
+
+   // Turn the actual timestamp into a string for use inside the log file.
   wlen = strftime(tbuf, TIMESSZ-1, "%F-%H-%M", &stamp);
   if (0 == wlen)
   {
     uerror(state, errno);
     return -1;
   }
-  plen = snprintf(pbuf, FPATHSZ, "%s/nmea-%s.csv", state->log, tbuf);
-  if (0 > plen)
-  {
-    uerror(state, errno);
-    return -1;
-  }
+
+
+
 
   /* open + append
    */
