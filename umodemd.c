@@ -100,12 +100,13 @@ int umodemd_scan          (umodemd_t *state, int argc, char ** argv);
  */
 const char *g_io_strs[2] =
 {
-  "TX",
-  "RX",
+  "TX", /* IO_TX */
+  "RX", /* IO_RX */
 };
 
 
-/*! is-running flag; switched to zero by signal handler on SIGINT.
+/*! is-running flag; switched to zero by signal handler on SIGINT,
+ * checked by main loop every pass in while().
  */
 volatile int g_running = 1;
 
@@ -115,26 +116,22 @@ void printd(const char *msg, int len)
 {
   int k;
   for (k = 0; k < len; k++)
-  switch(msg[k])
-  {
-    case '\r': printf("\\r"); break;
-    case '\n': printf("\\n"); break;
-    case '\0': printf("\\0"); break;
-    default:   printf("%c", msg[k]); break;
-  }
+    printf(isprint(msg[k]) ? "%c" : "\\x%02hhx" , msg[k]);
 }
  */
 
 
-/*! custom error handler
- * first attempts to write to debug log
- * on failure, a state-less attempt is made (see umodemd_write_debug)
+/*!
+ * custom error handler.
+ * first attempts to write to debug log.
+ * on failure, a state-less attempt is made (see umodemd_write_debug).
  *
  * NMEA-friendly errno indicator is sent to stdout
  * this avoids confusing the client when state->o_cli == stdout (default)
  * since uerror falls through, the cascading failure will log two errors
  * the first one will be the uerror(NULL, errno) call inside umodemd_write_debug
- * the second one will be the "real" error that triggered the first uerror() call
+ * the second one will be the "real" error that triggered the first uerror() call.
+ *
  */
 void uerror(umodemd_t *state, int e)
 {
@@ -163,7 +160,7 @@ int umodemd_write_debug(umodemd_t *state, char *msg)
   int wlen = fprintf(state->debug, "%ld %s\n", time(NULL), msg);
   if (0 > wlen)
   {
-    uerror(NULL, errno);
+    uerror(NULL, errno); /* UERROR STATE MUST BE NULL HERE. */
     return -1;
   }
   return 0;
@@ -245,42 +242,43 @@ int umodemd_write_log(umodemd_t *state, const char *msg, const size_t len, const
    *   state->log
    *   strftime "%F-%H-%M"
    */
-
-  // Make a copy of the timestamp, and round it
-  // to the nearest 10 minutes.
+  /* Make a copy of the timestamp, and round it
+   * to the nearest 10 minutes.
+   */
   result = memcpy(&filename_time, &stamp, sizeof(struct tm));
   if (0==result)
   {
-	  uerror(state, errno);
-	  return -1;
+    uerror(state, errno);
+    return -1;
   }
   filename_time.tm_min = (stamp.tm_min/10)*10;
 
-  // Turn the rounded timestamp into a string we can use in the file name.
+  /* Turn the rounded timestamp into a string we can use in the file name.
+   */
   wlen = strftime(filetimebuf, TIMESSZ-1, "%F-%H-%M", &filename_time);
-   if (0 == wlen)
-   {
-     uerror(state, errno);
-     return -1;
-   }
-
-   // Generate the file pa
-   plen = snprintf(pbuf, FPATHSZ, "%s/nmea-%s.csv", state->log, filetimebuf);
-   if (0 > plen)
-   {
-     uerror(state, errno);
-     return -1;
-   }
-
-   // Turn the actual timestamp into a string for use inside the log file.
-  wlen = strftime(tbuf, TIMESSZ-1, "%F-%H-%M", &stamp);
   if (0 == wlen)
   {
     uerror(state, errno);
     return -1;
   }
 
+  /* Generate the file pa
+   */
+  plen = snprintf(pbuf, FPATHSZ, "%s/nmea-%s.csv", state->log, filetimebuf);
+  if (0 > plen)
+  {
+    uerror(state, errno);
+    return -1;
+  }
 
+  /* Turn the actual timestamp into a string for use inside the log file.
+   */
+  wlen = strftime(tbuf, TIMESSZ-1, "%F-%H-%M", &stamp);
+  if (0 == wlen)
+  {
+    uerror(state, errno);
+    return -1;
+  }
 
 
   /* open + append
