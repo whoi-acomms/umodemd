@@ -2,7 +2,30 @@
  * \file umodemd.c
  * \author jon shusta <jshusta@whoi.edu>
  * \date 2009.04
- * \brief a daemon for logged serial comms with the micro-modem.
+ * \brief a daemon for tee-ing NMEA between stdio and a WHOI micro-modem to 
+ * logs.
+ */
+
+/*!
+ * \mainpage umodemd
+ * \section intro introduction
+ * umodemd will open a file descriptor with termios settings for a modem, then
+ * redirect stdin and stdout to that descriptor. everything written and read
+ * between stdio and the modem will also be logged to the specified directory.
+ *
+ * all runtime errors are handled by attempting to write them in NMEA-compliant
+ * strings, first to the logfiles, then to the console. clients which cannot
+ * handle the custom ID cannot use umodemd.
+ *
+ * \section usage usage
+ * <pre>umodemd 1.1 <jshusta@whoi.edu>
+ * usage: ./umodemd <serial-device> <baud-rate> <log-directory>
+ *  supports rates 19200 and 115200.
+ *  log-directory may not have a trailing slash.</pre>
+ *
+ * \section files files
+ *  <ul><li>config.h</li>
+ *  <li>umodemd.c</li></ul>
  */
 
 #include "config.h"
