@@ -61,13 +61,13 @@
  */
 #define UMODEMD_TALKER_ID "$UMDMD"
 
-#define BUFSZ       (0x8000) /*!< IO buffers */
-#define NMEASSZ     (0x1000) /*!< largest possible NMEA sentence */
-#define FPATHSZ     (0x1000) /*!< file paths */
-#define TIMESSZ     (0x1000) /*!< string representation of time */
-#define ERRORSZ     (0x1000) /*!< error strings */
-#define IO_TX       (0)      /*!< message from console, to modem, to log */
-#define IO_RX       (1)      /*!< message from modem, to console, to log */
+#define BUFSZ       (0x40000)  /*!< IO buffers */
+#define NMEASSZ     (0x40000)  /*!< largest possible NMEA sentence */
+#define FPATHSZ     (0x1000)   /*!< file paths */
+#define TIMESSZ     (0x1000)   /*!< string representation of time */
+#define ERRORSZ     (0x1000)   /*!< error strings */
+#define IO_TX       (0)        /*!< message from console, to modem, to log */
+#define IO_RX       (1)        /*!< message from modem, to console, to log */
 
 #define UMODEMD_INITIALIZER \
 {\
