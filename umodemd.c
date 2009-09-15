@@ -18,7 +18,7 @@
  * handle the custom ID cannot use umodemd.
  *
  * \section usage usage
- * <pre>umodemd 1.1 <jshusta@whoi.edu>
+ * <pre>umodemd x.y <jshusta@whoi.edu>
  * usage: ./umodemd <serial-device> <baud-rate> <log-directory>
  *  supports rates 19200 and 115200.
  *  log-directory may not have a trailing slash.</pre>
@@ -81,6 +81,8 @@
   .debug = NULL, \
 }
 
+#define UERROR(s,e) uerror(s,e,__LINE__)
+
 
 /*! modem daemon state
  */
@@ -100,9 +102,10 @@ typedef struct
 /** forward decls *************************************************************/
 
 
-void uerror  (umodemd_t *state, int e);
+void uerror  (umodemd_t *state, int e, const int line);
 
-int umodemd_write_debug   (umodemd_t *state, char *msg);
+void umodemd_sync();
+int umodemd_write_debug   (umodemd_t *state, const int line, char *msg);
 int umodemd_write_client  (umodemd_t *state, const char *msg, const size_t len, const struct timeval *now);
 int umodemd_write_modem   (umodemd_t *state, const char *msg, const size_t len, const struct timeval *now);
 int umodemd_write_log     (umodemd_t *state, const char *msg, const size_t len, const struct timeval *now, const int io);
@@ -144,6 +147,18 @@ void printd(const char *msg, int len)
  */
 
 
+/*! sync wrapper
+ */
+void umodemd_sync()
+{
+  struct tm stamp;
+  time_t now = time(NULL);
+  if (((time_t)-1) == now) return;
+  if (NULL == gmtime_r(&now, &stamp)) return;
+  if (0 == (stamp.tm_min % 15)) sync();
+}
+
+
 /*!
  * custom error handler.
  * first attempts to write to debug log.
@@ -156,34 +171,37 @@ void printd(const char *msg, int len)
  * the second one will be the "real" error that triggered the first uerror() call.
  *
  */
-void uerror(umodemd_t *state, int e)
+void uerror(umodemd_t *state, int e, const int line)
 {
-  char ebuf[ERRORSZ] = {'\0'};
+  char ebuf[ERRORSZ] = {'\0'},
+       cbuf[ERRORSZ] = {'\0'};
   long cksum = 0;
   int  uerr = 1;
 
+  strerror_r(e, ebuf, ERRORSZ);
+
   if (state)
   {
-    strerror_r(e, ebuf, ERRORSZ);
-    uerr = umodemd_write_debug(state, ebuf);
+    uerr = umodemd_write_debug(state, line, ebuf);
   }
+
   if (uerr)
   {
-    snprintf(ebuf, ERRORSZ, UMODEMD_TALKER_ID ",ERRNO,%d*", e);
-    nmea_cksum(ebuf, &cksum);
-    printf("%s%02hhx\n", ebuf, (int)cksum);
+    snprintf(cbuf, ERRORSZ, UMODEMD_TALKER_ID ",%s:%d,%d,%s*", __FILE__, line, e, ebuf);
+    nmea_cksum(cbuf, &cksum);
+    printf("%s%02hhx\n", cbuf, (int)cksum);
   }
 }
 
 
 /*!
  */
-int umodemd_write_debug(umodemd_t *state, char *msg)
+int umodemd_write_debug(umodemd_t *state, const int line, char *msg)
 {
-  int wlen = fprintf(state->debug, "%ld %s\n", time(NULL), msg);
+  int wlen = fprintf(state->debug, "%ld %s:%d %s\n", time(NULL), __FILE__, line, msg);
   if (0 > wlen)
   {
-    uerror(NULL, errno); /* UERROR STATE MUST BE NULL HERE. */
+    UERROR(NULL, errno); /* UERROR STATE MUST BE NULL HERE. */
     return -1;
   }
   return 0;
@@ -197,7 +215,7 @@ int umodemd_write_client(umodemd_t *state, const char *msg, const size_t len, co
   int wlen = fprintf(state->o_cli, "%s\n", msg);
   if (0 > wlen)
   {
-    uerror(state, errno);
+    UERROR(state, errno);
     return -1;
   }
   return 0;
@@ -216,7 +234,7 @@ int umodemd_write_modem(umodemd_t *state, const char *msg, const size_t len, con
   nlen = snprintf(nmsg, NMEASSZ, "%s\r\n", msg);
   if (0 > nlen)
   {
-    uerror(state, errno);
+    UERROR(state, errno);
     return -1;
   }
   while (wsz < nlen)
@@ -225,7 +243,7 @@ int umodemd_write_modem(umodemd_t *state, const char *msg, const size_t len, con
     if (0 == wr) break;
     if (0 > wr)
     {
-      uerror(state, errno);
+      UERROR(state, errno);
       return -1;
     }
     wsz += (size_t)wr;
@@ -239,25 +257,20 @@ int umodemd_write_modem(umodemd_t *state, const char *msg, const size_t len, con
 int umodemd_write_log(umodemd_t *state, const char *msg, const size_t len, const struct timeval *now, const int io)
 {
   char   tbuf[TIMESSZ] = {'\0'},
-		 filetimebuf[TIMESSZ] = {'\0'},
+         filetimebuf[TIMESSZ] = {'\0'},
          pbuf[FPATHSZ] = {'\0'};
   int    wlen,
-		 result,
          plen;
   FILE * fp;
-
+  void * result;
   struct tm stamp;
   struct tm filename_time;
 
   if (NULL == gmtime_r(&(now->tv_sec), &stamp))
   {
-    uerror(state, errno);
+    UERROR(state, errno);
     return -1;
   }
-
-  /* quick hack to sync every 15 min
-   */
-  if (0 == (stamp.tm_min % 15)) sync();
 
   /* get filename
    * round minutes off to tens
@@ -269,9 +282,9 @@ int umodemd_write_log(umodemd_t *state, const char *msg, const size_t len, const
    * to the nearest 10 minutes.
    */
   result = memcpy(&filename_time, &stamp, sizeof(struct tm));
-  if (0==result)
+  if (NULL == result)
   {
-    uerror(state, errno);
+    UERROR(state, errno);
     return -1;
   }
   filename_time.tm_min = (stamp.tm_min/10)*10;
@@ -281,7 +294,7 @@ int umodemd_write_log(umodemd_t *state, const char *msg, const size_t len, const
   wlen = strftime(filetimebuf, TIMESSZ-1, "%F-%H-%M", &filename_time);
   if (0 == wlen)
   {
-    uerror(state, errno);
+    UERROR(state, errno);
     return -1;
   }
 
@@ -290,26 +303,16 @@ int umodemd_write_log(umodemd_t *state, const char *msg, const size_t len, const
   plen = snprintf(pbuf, FPATHSZ, "%s/nmea-%s.csv", state->log, filetimebuf);
   if (0 > plen)
   {
-    uerror(state, errno);
+    UERROR(state, errno);
     return -1;
   }
-
-  /* Turn the actual timestamp into a string for use inside the log file.
-   */
-  wlen = strftime(tbuf, TIMESSZ-1, "%F-%H-%M", &stamp);
-  if (0 == wlen)
-  {
-    uerror(state, errno);
-    return -1;
-  }
-
 
   /* open + append
    */
   fp = fopen(pbuf, "a");
   if (NULL == fp)
   {
-    uerror(state, errno);
+    UERROR(state, errno);
     return -1;
   }
 
@@ -322,7 +325,7 @@ int umodemd_write_log(umodemd_t *state, const char *msg, const size_t len, const
   wlen = strftime(tbuf, TIMESSZ-1, "%F %T", &stamp);
   if (0 == wlen)
   {
-    uerror(state, errno);
+    UERROR(state, errno);
     memset(tbuf, '\0', TIMESSZ);
     tbuf[0]=' ';
   }
@@ -330,8 +333,8 @@ int umodemd_write_log(umodemd_t *state, const char *msg, const size_t len, const
   /* write
    */
   wlen = fprintf(fp, "%sZ,NMEA.%s,%s\n", tbuf, g_io_strs[io], msg);
-  if (0 > wlen) uerror(state, errno);
-  if (fclose(fp)) uerror(state, errno);
+  if (0 > wlen) UERROR(state, errno);
+  if (fclose(fp)) UERROR(state, errno);
   return 0;
 }
 
@@ -374,7 +377,7 @@ int umodemd_fetch(umodemd_t *state, const int fd, char *wbuf, const size_t maxle
   ret = poll(&pfd, 1, state->t_pol);
   if (0 > ret)
   {
-    uerror(state, errno);
+    UERROR(state, errno);
     return -1;
   }
 
@@ -387,7 +390,7 @@ int umodemd_fetch(umodemd_t *state, const int fd, char *wbuf, const size_t maxle
   len = read(pfd.fd, wbuf + *wlen, maxlen - *wlen);
   if (0 > len)
   {
-    uerror(state, errno);
+    UERROR(state, errno);
     return -1;
   }
 
@@ -406,14 +409,14 @@ int umodemd_open_modem(umodemd_t *state)
   state->mfd = open(state->dev, O_RDWR|O_NOCTTY);
   if (0 > state->mfd)
   {
-    uerror(state, errno);
+    UERROR(state, errno);
     return -1;
   }
 
   memset(&opt, 0, sizeof(struct termios));
   if (tcgetattr(state->mfd, &opt))
   {
-    uerror(state, errno);
+    UERROR(state, errno);
     return -1;
   }
 
@@ -434,23 +437,31 @@ int umodemd_open_modem(umodemd_t *state)
 
   switch (state->baud)
   {
+    case   1200: rate = B1200;   break;
+    case   1800: rate = B1800;   break;
+    case   2400: rate = B2400;   break;
+    case   4800: rate = B4800;   break;
+    case   9600: rate = B9600;   break;
     default:
-    case 19200:  rate = B19200;  break;
+    case  19200: rate = B19200;  break;
+    case  38400: rate = B38400;  break;
+    case  57600: rate = B57600;  break;
     case 115200: rate = B115200; break;
+    case 230400: rate = B230400; break;
   }
   if (cfsetispeed(&opt, rate))
   {
-    uerror(state, errno);
+    UERROR(state, errno);
     return -1;
   }
   if (cfsetospeed(&opt, rate))
   {
-    uerror(state, errno);
+    UERROR(state, errno);
     return -1;
   }
   if (tcsetattr(state->mfd, TCSANOW, &opt))
   {
-    uerror(state, errno);
+    UERROR(state, errno);
     return -1;
   }
 
@@ -533,6 +544,7 @@ int umodemd(umodemd_t *state)
 
   while (g_running)
   {
+    umodemd_sync();
     if (0 < umodemd_fetch(state, state->mfd, rxbuf, BUFSZ, &rxlen))
     while (1)
     {
