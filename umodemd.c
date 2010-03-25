@@ -61,6 +61,9 @@
  */
 #define UMODEMD_TALKER_ID "$UMDMD"
 
+#define UM_LOGW_MINUTE  (30)  /*!< divide logs on 30 min interval */
+#define UM_SYNC_MINUTE  (10)  /*!< sync disks on 10 min interval */
+
 #define BUFSZ       (0x40000)  /*!< IO buffers */
 #define NMEASSZ     (0x40000)  /*!< largest possible NMEA sentence */
 #define FPATHSZ     (0x1000)   /*!< file paths */
@@ -69,17 +72,6 @@
 #define IO_TX       (0)        /*!< message from console, to modem, to log */
 #define IO_RX       (1)        /*!< message from modem, to console, to log */
 
-#define UMODEMD_INITIALIZER \
-{\
-  .dev   = NULL, \
-  .log   = NULL, \
-  .baud  = 19200, \
-  .t_pol = 50, \
-  .mfd   = -1, \
-  .i_cli = stdin, \
-  .o_cli = stdout, \
-  .debug = NULL, \
-}
 
 #define UERROR(s,e) uerror(s,e,__LINE__)
 
@@ -92,7 +84,8 @@ typedef struct
        *  log;
   int     baud,
           t_pol,
-          mfd;
+          mfd,
+          sync_chk;
   FILE *  i_cli,
        *  o_cli,
        *  debug;
@@ -104,7 +97,7 @@ typedef struct
 
 void uerror  (umodemd_t *state, int e, const int line);
 
-void umodemd_sync();
+void umodemd_sync         (umodemd_t *state);
 int umodemd_write_debug   (umodemd_t *state, const int line, char *msg);
 int umodemd_write_client  (umodemd_t *state, const char *msg, const size_t len, const struct timeval *now);
 int umodemd_write_modem   (umodemd_t *state, const char *msg, const size_t len, const struct timeval *now);
@@ -136,6 +129,22 @@ const char *g_io_strs[2] =
  */
 volatile int g_running = 1;
 
+/*! global state. accessed directly only in main() and signal handler.
+ */
+umodemd_t g_state =
+{
+  .dev      =  NULL,
+  .log      =  NULL,
+  .baud     =  19200,
+  .t_pol    =  50,
+  .mfd      =  -1,
+  .sync_chk =  1,
+  .debug    =  NULL,
+};
+
+
+// definitions
+
 
 /*!
 void printd(const char *msg, int len)
@@ -149,13 +158,22 @@ void printd(const char *msg, int len)
 
 /*! sync wrapper
  */
-void umodemd_sync()
+void umodemd_sync(umodemd_t *state)
 {
   struct tm stamp;
   time_t now = time(NULL);
   if (((time_t)-1) == now) return;
   if (NULL == gmtime_r(&now, &stamp)) return;
-  if (0 == (stamp.tm_min % 15)) sync();
+
+  if (0 == (stamp.tm_min % UM_SYNC_MINUTE))
+  {
+    if (state->sync_chk)
+    {
+      state->sync_chk = 0;
+      sync();
+    }
+  }
+  else state->sync_chk = 1;
 }
 
 
@@ -287,7 +305,7 @@ int umodemd_write_log(umodemd_t *state, const char *msg, const size_t len, const
     UERROR(state, errno);
     return -1;
   }
-  filename_time.tm_min = (stamp.tm_min/10)*10;
+  filename_time.tm_min = (stamp.tm_min/UM_LOGW_MINUTE)*UM_LOGW_MINUTE;
 
   /* Turn the rounded timestamp into a string we can use in the file name.
    */
@@ -544,7 +562,8 @@ int umodemd(umodemd_t *state)
 
   while (g_running)
   {
-    umodemd_sync();
+    umodemd_sync(state);
+
     if (0 < umodemd_fetch(state, state->mfd, rxbuf, BUFSZ, &rxlen))
     while (1)
     {
@@ -554,6 +573,7 @@ int umodemd(umodemd_t *state)
       ret = umodemd_dispatch(state, msg, len, IO_RX);
     }
 
+    if (isatty(fileno(state->i_cli)))
     if (0 < umodemd_fetch(state, fileno(state->i_cli), txbuf, BUFSZ, &txlen))
     {
       memset(msg, '\0', sizeof(char) * NMEASSZ);
@@ -617,8 +637,9 @@ int umodemd_usage(char *img)
 int main(int     argc,
          char ** argv)
 {
-  umodemd_t state = UMODEMD_INITIALIZER;
-  return umodemd_scan(&state, argc-1, argv+1)
+  g_state.i_cli = stdin;
+  g_state.o_cli = stdout;
+  return umodemd_scan(&g_state, argc-1, argv+1)
        ? umodemd_usage(argv[0])
-       : umodemd(&state);
+       : umodemd(&g_state);
 }
