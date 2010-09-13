@@ -46,7 +46,6 @@
 #include <sys/time.h>
 #include <signal.h>
 #include <errno.h>
-#include <libnmea.h>
 
 #define MAX(a,b)    (((a)>(b))?(a):(b))
 #define MIN(a,b)    (((a)<(b))?(a):(b))
@@ -113,6 +112,12 @@ void umodemd_close_debug  (umodemd_t *state);
 void umodemd_signal       (int s);
 int umodemd               (umodemd_t *state);
 int umodemd_scan          (umodemd_t *state, int argc, char ** argv);
+
+/** in-tree libnmea module ****************************************************/
+
+extern int nmea_cksum(const char *sentence, long *cksum);
+extern size_t nmea_scan(char *wbuf, const size_t maxlen, char *rbuf, size_t *rlen);
+
 
 
 /*! message strings for the log source ID

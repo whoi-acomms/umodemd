@@ -15,7 +15,7 @@ AM_PROG_CC_C_O
 
 AC_HEADER_STDC
 AC_HEADER_TIME
-AC_CHECK_HEADERS([stdlib.h fcntl.h termios.h dirent.h sys/time.h sys/ioctl.h libnmea.h])
+AC_CHECK_HEADERS([stdlib.h fcntl.h termios.h dirent.h sys/time.h sys/ioctl.h])
 
 AC_C_CONST
 AC_C_VOLATILE
@@ -29,7 +29,7 @@ AC_FUNC_CLOSEDIR_VOID
 AC_FUNC_SELECT_ARGTYPES
 AC_FUNC_STRERROR_R
 AC_FUNC_STRFTIME
-AC_CHECK_FUNCS([fprintf snprintf gettimeofday strcspn select memset memcpy nmea_cksum nmea_scan])
+AC_CHECK_FUNCS([fprintf snprintf gettimeofday strcspn select memset memcpy memmove strtol strchr])
 
 AC_CONFIG_FILES([Makefile])
 
