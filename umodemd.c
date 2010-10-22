@@ -54,6 +54,10 @@
 #  define CNEW_RTSCTS (CRTSCTS)
 #endif
 
+/*! filepath of debug log.
+ */
+#define DEBUG_LOGFILE "umodemd.log"
+
 /*!
  * a talker ID to pass NMEA-compliant log messages through the console
  * when writing to the debug log fails.
@@ -86,8 +90,7 @@ typedef struct
           mfd,
           sync_chk;
   FILE *  i_cli,
-       *  o_cli,
-       *  debug;
+       *  o_cli;
 } umodemd_t;
 
 
@@ -105,10 +108,8 @@ int umodemd_dispatch      (umodemd_t *state, char *msg,  size_t len, const int i
 int umodemd_fetch         (umodemd_t *state, const int fd, char *wbuf, const size_t maxlen, size_t *wlen);
 int umodemd_open_modem    (umodemd_t *state);
 int umodemd_open_client   (umodemd_t *state);
-int umodemd_open_debug    (umodemd_t *state);
 void umodemd_close_modem  (umodemd_t *state);
 void umodemd_close_client (umodemd_t *state);
-void umodemd_close_debug  (umodemd_t *state);
 void umodemd_signal       (int s);
 int umodemd               (umodemd_t *state);
 int umodemd_scan          (umodemd_t *state, int argc, char ** argv);
@@ -144,7 +145,6 @@ umodemd_t g_state =
   .t_pol    =  50,
   .mfd      =  -1,
   .sync_chk =  1,
-  .debug    =  NULL,
 };
 
 
@@ -221,7 +221,16 @@ void uerror(umodemd_t *state, int e, const int line)
  */
 int umodemd_write_debug(umodemd_t *state, const int line, char *msg)
 {
-  int wlen = fprintf(state->debug, "%ld %s:%d %s\n", time(NULL), __FILE__, line, msg);
+  int wlen;
+  FILE *df;
+  df = fopen(DEBUG_LOGFILE, "a");
+  if (NULL == df)
+  {
+    fprintf(stderr, "FATAL: could not open " DEBUG_LOGFILE "\n");
+    return -1;
+  }
+  wlen = fprintf(df, "%ld %s:%d %s\n", time(NULL), __FILE__, line, msg);
+  fclose(df);
   if (0 > wlen)
   {
     UERROR(NULL, errno); /* UERROR STATE MUST BE NULL HERE. */
@@ -400,6 +409,7 @@ int umodemd_fetch(umodemd_t *state, const int fd, char *wbuf, const size_t maxle
   ret = poll(&pfd, 1, state->t_pol);
   if (0 > ret)
   {
+    if (EINTR == errno) return 0;
     UERROR(state, errno);
     return -1;
   }
@@ -413,6 +423,7 @@ int umodemd_fetch(umodemd_t *state, const int fd, char *wbuf, const size_t maxle
   len = read(pfd.fd, wbuf + *wlen, maxlen - *wlen);
   if (0 > len)
   {
+    if (EINTR == errno) return 0;
     UERROR(state, errno);
     return -1;
   }
@@ -502,33 +513,12 @@ int umodemd_open_client(umodemd_t *state)
 
 /*!
  */
-int umodemd_open_debug(umodemd_t *state)
-{
-  state->debug = fopen("umodemd.log", "w");
-  if (NULL == state->debug)
-  {
-    fprintf(stderr, "FATAL: could not open debug.log\n");
-    return -1;
-  }
-  return 0;
-}
-
-
-/*!
- */
 void umodemd_close_modem(umodemd_t *state)
 {
 #ifdef HAVE_SYS_IOCTL_H
   ioctl(state->mfd, TCFLSH, 0);
 #endif
   close(state->mfd);
-}
-
-/*!
- */
-void umodemd_close_debug(umodemd_t *state)
-{
-  fclose(state->debug);
 }
 
 
@@ -559,7 +549,6 @@ int umodemd(umodemd_t *state)
           len   = 0,
           ret   = 0;
 
-  if (umodemd_open_debug(state))  return 1;
   if (umodemd_open_client(state)) return 1;
   if (umodemd_open_modem(state))  return 1;
 
@@ -589,7 +578,6 @@ int umodemd(umodemd_t *state)
   }
 
   sync();
-  umodemd_close_debug(state);
   umodemd_close_client(state);
   umodemd_close_modem(state);
   return 0;
