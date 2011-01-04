@@ -1,7 +1,5 @@
 #!/bin/sh
-#
-# run libtoolize before first bootstrap
-#
+# no libtoolize needed
 
 aclocal -I config
 autoheader

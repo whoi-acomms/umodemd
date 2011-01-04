@@ -2,7 +2,7 @@
 
 DOXYFILE_ENCODING      = UTF-8
 PROJECT_NAME           = "WHOI Micro-modem daemon"
-PROJECT_NUMBER         = 1.6
+PROJECT_NUMBER         = 1.8
 OUTPUT_DIRECTORY       = doc
 
 # If the CREATE_SUBDIRS tag is set to YES, then doxygen will create 

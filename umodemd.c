@@ -567,7 +567,12 @@ int umodemd(umodemd_t *state)
       ret = umodemd_dispatch(state, msg, len, IO_RX);
     }
 
-    if (isatty(fileno(state->i_cli)))
+    if (0 > fileno(state->i_cli))
+    {
+      perror("fileno");
+      break;
+    }
+
     if (0 < umodemd_fetch(state, fileno(state->i_cli), txbuf, BUFSZ, &txlen))
     {
       memset(msg, '\0', sizeof(char) * NMEASSZ);

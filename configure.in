@@ -1,5 +1,5 @@
 AC_PREREQ(2.59)
-AC_INIT([umodemd], [1.7], [jshusta@whoi.edu])
+AC_INIT([umodemd], [1.8], [jshusta@whoi.edu])
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_HEADER([config.h])
 AC_CONFIG_SRCDIR([umodemd.c])
@@ -8,8 +8,6 @@ AM_INIT_AUTOMAKE
 
 AC_PROG_CC
 AC_PROG_GCC_TRADITIONAL
-AC_PROG_LIBTOOL
-AC_PROG_RANLIB
 
 AM_PROG_CC_C_O
 
