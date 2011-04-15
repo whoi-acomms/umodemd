@@ -1,0 +1,12 @@
+# KDE Config File  
+[Desktop Entry]
+Encoding=UTF-8
+Type=Application
+Exec=packagegenerator -caption "%c" %i %m  
+Icon=packagegenerator.png
+DocPath=packagegenerator/index.html
+Comment=
+Comment[de]=
+Terminal=0
+Name=PackageGenerator
+Name[de]=PackageGenerator

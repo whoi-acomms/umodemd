@@ -1,0 +1,17 @@
+About create2
+
+The test application in ROHC need binary files of packages.
+
+This is a program that generates binary files from the output of the tcpdump command.
+
+    use like this to create 10 udp packages
+
+    tcpdump -c 10 -s 0 -e -n -x -S udp > file
+    less file | ./create2
+
+It creates files like flow-XXXX-ip.bin were the XXXX is replaced by the number of the package.
+
+Then it is just to run the testapp like this
+
+ ./testapp -s ./flow
+

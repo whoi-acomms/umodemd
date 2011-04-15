@@ -1,0 +1,46 @@
+PROC Syntax
+
+// ROHCInstance
+
+---Instance'\n'
+Creator : ROHC-SMD147'\n'
+Variable1 : Value'\n'
+...
+VariableN : Value'\n'
+
+// ROHCProfile
+
+---Profile'\n'
+Variable0 : Value'\n'
+...
+VariableN : Value'\n'
+---Profile'\n'
+...
+---Profile'\n'
+
+
+// ROHCContext
+
+---Context'\n'
+Variable0 : Value'\n'
+...
+VariableN : Value'\n'
+---Context'\n'
+...
+---Context'\n'
+
+
+---------------------------
+Utdata från Parser
+
+LinkedList
+	1 Instance
+		- 1 [Creator][Version][MAX_CID][LARGE_CID][...][]
+	2 Profile
+		- 1
+		- ...
+		- n
+	3 Context
+		- 1
+		- ...
+		- n

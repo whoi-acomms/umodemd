@@ -1,0 +1,12 @@
+# KDE Config File  
+[Desktop Entry]
+Encoding=UTF-8
+Type=Application
+Exec=small -caption "%c" %i %m  
+Icon=small.png
+DocPath=small/index.html
+Comment=
+Comment[de]=
+Terminal=0
+Name=Small
+Name[de]=Small

@@ -1,0 +1,38 @@
+<?xml version = '1.0' encoding = 'UTF-8'?>
+<!DOCTYPE KDevPrjSession>
+<KDevPrjSession>
+ <LastCompileConfig>(Förval)</LastCompileConfig>
+ <Mainframe MaximizeMode="1" />
+ <DocsAndViews NumberOfDocuments="10" >
+  <Doc0 CursorPosLine="29" Type="KWriteDoc" NumberOfViews="1" CursorPosCol="0" FileName="/home/martin/devel/package-generator-gui/packagegenerator/packagegenerator/udpprofile.h" >
+   <View0 Top="0" Width="793" Attach="1" Height="452" Left="0" Focus="0" Type="KWriteView" MinMaxMode="0" />
+  </Doc0>
+  <Doc1 CursorPosLine="39" Type="KWriteDoc" NumberOfViews="1" CursorPosCol="0" FileName="/home/martin/devel/package-generator-gui/packagegenerator/packagegenerator/udpprofile.cpp" >
+   <View0 Top="0" Width="793" Attach="1" Height="452" Left="0" Focus="0" Type="KWriteView" MinMaxMode="0" />
+  </Doc1>
+  <Doc2 CursorPosLine="80" Type="KWriteDoc" NumberOfViews="1" CursorPosCol="2" FileName="/home/martin/devel/package-generator-gui/packagegenerator/packagegenerator/liteprofile.cpp" >
+   <View0 Top="0" Width="793" Attach="1" Height="452" Left="0" Focus="0" Type="KWriteView" MinMaxMode="0" />
+  </Doc2>
+  <Doc3 CursorPosLine="39" Type="KWriteDoc" NumberOfViews="1" CursorPosCol="19" FileName="/home/martin/devel/package-generator-gui/packagegenerator/packagegenerator/baseprofile.cpp" >
+   <View0 Top="0" Width="793" Attach="1" Height="452" Left="0" Focus="0" Type="KWriteView" MinMaxMode="0" />
+  </Doc3>
+  <Doc4 CursorPosLine="51" Type="KWriteDoc" NumberOfViews="1" CursorPosCol="19" FileName="/home/martin/devel/package-generator-gui/packagegenerator/packagegenerator/baseprofile.h" >
+   <View0 Top="0" Width="793" Attach="1" Height="452" Left="0" Focus="0" Type="KWriteView" MinMaxMode="0" />
+  </Doc4>
+  <Doc5 CursorPosLine="24" Type="KWriteDoc" NumberOfViews="1" CursorPosCol="0" FileName="/home/martin/devel/package-generator-gui/packagegenerator/packagegenerator/liteprofile.h" >
+   <View0 Top="0" Width="793" Attach="1" Height="452" Left="0" Focus="0" Type="KWriteView" MinMaxMode="0" />
+  </Doc5>
+  <Doc6 CursorPosLine="62" Type="KWriteDoc" NumberOfViews="1" CursorPosCol="8" FileName="/home/martin/devel/package-generator-gui/packagegenerator/packagegenerator/processparser.cpp" >
+   <View0 Top="0" Width="793" Attach="1" Height="452" Left="0" Focus="0" Type="KWriteView" MinMaxMode="0" />
+  </Doc6>
+  <Doc7 CursorPosLine="222" Type="KWriteDoc" NumberOfViews="1" CursorPosCol="25" FileName="/home/martin/devel/package-generator-gui/packagegenerator/packagegenerator/wstreamadd.cpp" >
+   <View0 Top="0" Width="783" Attach="1" Height="452" Left="0" Focus="1" Type="KWriteView" MinMaxMode="0" />
+  </Doc7>
+  <Doc8 CursorPosLine="65" Type="KWriteDoc" NumberOfViews="1" CursorPosCol="68" FileName="/home/martin/devel/package-generator-gui/packagegenerator/packagegenerator/streamexec.cpp" >
+   <View0 Top="0" Width="783" Attach="1" Height="452" Left="0" Focus="0" Type="KWriteView" MinMaxMode="0" />
+  </Doc8>
+  <Doc9 CursorPosLine="46" Type="KWriteDoc" NumberOfViews="1" CursorPosCol="0" FileName="/home/martin/devel/package-generator-gui/packagegenerator/packagegenerator/wstreamadd.h" >
+   <View0 Top="0" Width="783" Attach="1" Height="452" Left="0" Focus="0" Type="KWriteView" MinMaxMode="0" />
+  </Doc9>
+ </DocsAndViews>
+</KDevPrjSession>
