@@ -1,3 +1,48 @@
-umodemd 1.1 <jshusta@whoi.edu>
-usage: ./umodemd <serial-device> <baud-rate> <log-directory>
-  log-directory may not have a trailing slash.
+MAINTAINING
+
+starting from fresh source, do this once:
+
+  $ libtoolize
+  $ ./bootstrap.sh
+  $ ./configure
+  $ make
+
+except for projects which do not use libtool (not sure there are any).
+
+thereafter, changes to configure.in and Makefile.am should only require:
+
+  $ make
+
+but, will sometimes require:
+
+  $ ./bootstrap.sh
+  $ ./configure
+  $ make
+
+so try that before googling the problem.
+
+to keep configure.in up to date with portability issues:
+
+  $ autoscan
+
+to package a tag:
+
+  $ make dist
+
+DO NOT commit any of Doxyfile, Makefile.am, configure.in referencing a version
+that has already been tagged and placed on acomms.whoi.edu/software
+
+ideally, changes in major revision necessitate copying trunk to a branch.
+e.g. when trunk will be going from v1.x to v2.0,
+
+- commit all 1.x changes, tag and release if desired,
+
+- copy foobar/trunk to foobar/branches/foobar1 using absolute URLs to stay
+  in the repo; DO NOT commit your working copy as the old branch,
+
+- change Doxyfile, Makefile.am, configure.in files in foobar/trunk to reflect the
+  new major version, then commit,
+
+- continue working in foobar/trunk working copy to do 2.0 work,
+
+- checkout foobar/branches/foobar1 to a working copy to do 1.x work.
